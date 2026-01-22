@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:14-alpine
+    container_name: voice-to-pay-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voice_to_pay}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - voice-to-pay-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: voice-to-pay-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./database/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - voice-to-pay-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # AI 服务 (Python)
+  ai-service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: voice-to-pay-ai-service
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-voice-to-pay-products}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-voice_to_pay}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AI_SERVICE_HOST=0.0.0.0
+      - AI_SERVICE_PORT=8000
+    ports:
+      - "${AI_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./ai_service:/app
+    networks:
+      - voice-to-pay-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - full
+
+  # Web3 服务 (Node.js)
+  web3-service:
+    build:
+      context: ./web3_service
+      dockerfile: Dockerfile
+    container_name: voice-to-pay-web3-service
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - ENVIRONMENT=${ENVIRONMENT:-testnet}
+      - POLYGON_MUMBAI_RPC_URL=${POLYGON_MUMBAI_RPC_URL}
+      - ALCHEMY_API_KEY=${ALCHEMY_API_KEY}
+      - POLYGONSCAN_API_KEY=${POLYGONSCAN_API_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-voice_to_pay}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - WEB3_SERVICE_HOST=0.0.0.0
+      - WEB3_SERVICE_PORT=3000
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    ports:
+      - "${WEB3_SERVICE_PORT:-3000}:3000"
+    volumes:
+      - ./web3_service:/app
+      - /app/node_modules
+    networks:
+      - voice-to-pay-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - full
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  voice-to-pay-network:
+    driver: bridge

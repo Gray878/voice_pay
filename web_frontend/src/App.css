@@ -1,0 +1,799 @@
+/* ========================================
+   Voice-to-Pay - 主应用样式
+   设计系统：金色/琥珀色 + 深色主题
+   ======================================== */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ========================================
+   导航栏
+   ======================================== */
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.1);
+}
+
+.navbar-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  stroke: #F59E0B;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+}
+
+.logo-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ========================================
+   Hero 区域
+   ======================================== */
+
+.hero-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rem 2rem 4rem;
+  overflow: hidden;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  max-width: 800px;
+}
+
+.hero-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+  color: #F8FAFC;
+}
+
+.hero-title .highlight {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(245, 158, 11, 0.3);
+}
+
+.hero-subtitle {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  color: #94A3B8;
+  margin-bottom: 3rem;
+  line-height: 1.6;
+  font-weight: 300;
+}
+
+.hero-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.hint-text {
+  color: #64748B;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Hero 背景装饰 */
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  animation: float 8s ease-in-out infinite;
+}
+
+.glow-orb-1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #F59E0B 0%, transparent 70%);
+  top: 10%;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.glow-orb-2 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, #FBBF24 0%, transparent 70%);
+  bottom: 20%;
+  right: 15%;
+  animation-delay: 2s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+.grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(245, 158, 11, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+}
+
+/* ========================================
+   主内容区域
+   ======================================== */
+
+.main-content {
+  position: relative;
+  z-index: 10;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  width: 100%;
+}
+
+/* ========================================
+   商品区域
+   ======================================== */
+
+.products-section {
+  margin: 3rem 0;
+}
+
+.product-list h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.75rem;
+  margin-bottom: 2rem;
+  color: #F8FAFC;
+  text-align: center;
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.product-card {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(245, 158, 11, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.product-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.product-card:hover {
+  border-color: #F59E0B;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.3);
+}
+
+.product-card:hover::before {
+  opacity: 1;
+}
+
+.product-card.selected {
+  border-color: #FBBF24;
+  background: rgba(245, 158, 11, 0.1);
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.4);
+}
+
+.product-image {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.product-info h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: #F8FAFC;
+}
+
+.product-description {
+  font-size: 0.9rem;
+  color: #94A3B8;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.product-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(245, 158, 11, 0.1);
+}
+
+.product-price {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #FBBF24;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.product-chain {
+  padding: 0.25rem 0.75rem;
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* ========================================
+   支付面板
+   ======================================== */
+
+.payment-panel {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: calc(100% - 4rem);
+  max-width: 500px;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.payment-card {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  border: 2px solid #F59E0B;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 10px 50px rgba(245, 158, 11, 0.4);
+}
+
+.payment-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: #F8FAFC;
+  text-align: center;
+}
+
+.payment-details {
+  margin-bottom: 1.5rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.1);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  color: #94A3B8;
+  font-size: 0.9rem;
+}
+
+.detail-value {
+  color: #F8FAFC;
+  font-weight: 600;
+}
+
+.detail-value.highlight {
+  color: #FBBF24;
+  font-family: 'Orbitron', sans-serif;
+}
+
+.payment-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.payment-actions .btn {
+  flex: 1;
+}
+
+/* ========================================
+   按钮样式
+   ======================================== */
+
+.btn {
+  padding: 0.875rem 2rem;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Exo 2', sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.btn:hover::before {
+  opacity: 1;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  color: #0F172A;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(245, 158, 11, 0.6);
+}
+
+.btn-secondary {
+  background: rgba(100, 116, 139, 0.2);
+  color: #E2E8F0;
+  border: 1px solid rgba(100, 116, 139, 0.5);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(100, 116, 139, 0.3);
+  border-color: rgba(100, 116, 139, 0.7);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ========================================
+   空状态
+   ======================================== */
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #94A3B8;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #F8FAFC;
+}
+
+.empty-state p {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* ========================================
+   页脚
+   ======================================== */
+
+.footer {
+  margin-top: auto;
+  padding: 2rem;
+  border-top: 1px solid rgba(245, 158, 11, 0.1);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.footer-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-text {
+  color: #64748B;
+  font-size: 0.9rem;
+}
+
+.footer-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.footer-link {
+  color: #94A3B8;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.2s ease;
+}
+
+.footer-link:hover {
+  color: #FBBF24;
+}
+
+/* ========================================
+   钱包连接（导航栏内）
+   ======================================== */
+
+.wallet-connect {
+  margin: 0;
+}
+
+.wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 50px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.wallet-icon {
+  width: 20px;
+  height: 20px;
+  stroke: #FBBF24;
+}
+
+.wallet-address {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #FBBF24;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-badge.connected {
+  background: #10b981;
+  color: white;
+}
+
+.btn-connect {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  color: #0F172A;
+  padding: 0.625rem 1.5rem;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* ========================================
+   语音按钮（Hero 内）
+   ======================================== */
+
+.voice-button-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.voice-button {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 3px solid #F59E0B;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(251, 191, 36, 0.1) 100%);
+  color: #FBBF24;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.4);
+  position: relative;
+}
+
+.voice-button::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, #F59E0B, #FBBF24);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.voice-button:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.voice-button:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 0 60px rgba(245, 158, 11, 0.6);
+}
+
+.voice-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #64748B;
+  color: #64748B;
+  box-shadow: none;
+}
+
+.voice-button.listening {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 40px rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 80px rgba(245, 158, 11, 0.8);
+  }
+}
+
+.mic-icon {
+  width: 60px;
+  height: 60px;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.5));
+}
+
+.transcript {
+  max-width: 500px;
+  padding: 1rem 1.5rem;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #E2E8F0;
+  font-size: 0.95rem;
+}
+
+/* ========================================
+   交易状态
+   ======================================== */
+
+.transaction-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  margin: 2rem 0;
+  border: 2px solid;
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+}
+
+.status-success {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.status-error {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.status-processing {
+  border-color: #F59E0B;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.status-confirmation {
+  border-color: #FBBF24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.status-icon {
+  flex-shrink: 0;
+}
+
+.status-content {
+  flex: 1;
+}
+
+.status-message {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #F8FAFC;
+  font-size: 1rem;
+}
+
+.tx-hash {
+  font-size: 0.85rem;
+  color: #94A3B8;
+  font-family: 'Orbitron', monospace;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(245, 158, 11, 0.2);
+  border-top: 3px solid #F59E0B;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ========================================
+   响应式设计
+   ======================================== */
+
+@media (max-width: 768px) {
+  .navbar-content {
+    padding: 1rem;
+  }
+
+  .logo-text {
+    font-size: 1rem;
+  }
+
+  .hero-section {
+    padding: 5rem 1rem 3rem;
+  }
+
+  .hero-title {
+    font-size: 2rem;
+  }
+
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+
+  .voice-button {
+    width: 150px;
+    height: 150px;
+  }
+
+  .mic-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
+
+  .products-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-panel {
+    width: calc(100% - 2rem);
+    bottom: 1rem;
+  }
+
+  .payment-card {
+    padding: 1.5rem;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .footer-links {
+    justify-content: center;
+  }
+}
+
+/* ========================================
+   可访问性 - 减少动画
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

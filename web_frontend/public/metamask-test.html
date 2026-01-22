@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaMask 诊断工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0F172A;
+            color: #F8FAFC;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 2px solid;
+        }
+        .success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: #10b981;
+        }
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+        }
+        .warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: #F59E0B;
+        }
+        button {
+            background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+            color: #0F172A;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(245, 158, 11, 0.6);
+        }
+        pre {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        h1 {
+            color: #FBBF24;
+        }
+        h2 {
+            color: #F59E0B;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 MetaMask 诊断工具</h1>
+    
+    <div id="status"></div>
+    
+    <h2>操作</h2>
+    <button onclick="checkMetaMask()">检查 MetaMask</button>
+    <button onclick="connectWallet()">连接钱包</button>
+    <button onclick="getAccounts()">获取账户</button>
+    <button onclick="getChainId()">获取链 ID</button>
+    <button onclick="location.reload()">刷新页面</button>
+    
+    <h2>详细信息</h2>
+    <div id="details"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
+            statusDiv.innerHTML += `<div class="status ${className}">${message}</div>`;
+            console.log(message);
+        }
+
+        function showDetails(title, data) {
+            const detailsDiv = document.getElementById('details');
+            detailsDiv.innerHTML += `<h3>${title}</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+
+        async function checkMetaMask() {
+            document.getElementById('status').innerHTML = '';
+            document.getElementById('details').innerHTML = '';
+            
+            log('🔍 开始检查 MetaMask...', 'info');
+            
+            // 检查 window.ethereum
+            if (typeof window.ethereum === 'undefined') {
+                log('❌ window.ethereum 未定义', 'error');
+                log('MetaMask 未安装或未加载', 'error');
+                log('请确保:\n1. 已安装 MetaMask 扩展\n2. 扩展已启用\n3. 刷新页面', 'warning');
+                return;
+            }
+            
+            log('✅ window.ethereum 已找到', 'success');
+            
+            // 检查是否是 MetaMask
+            if (window.ethereum.isMetaMask) {
+                log('✅ 确认是 MetaMask', 'success');
+            } else {
+                log('⚠️ 不是 MetaMask 或版本较旧', 'warning');
+            }
+            
+            // 显示详细信息
+            const info = {
+                isMetaMask: window.ethereum.isMetaMask,
+                chainId: window.ethereum.chainId,
+                networkVersion: window.ethereum.networkVersion,
+                selectedAddress: window.ethereum.selectedAddress,
+            };
+            
+            showDetails('window.ethereum 信息', info);
+            
+            log('✅ MetaMask 检查完成', 'success');
+        }
+
+        async function connectWallet() {
+            document.getElementById('status').innerHTML = '';
+            
+            log('🔗 开始连接钱包...', 'info');
+            
+            if (typeof window.ethereum === 'undefined') {
+                log('❌ MetaMask 未找到', 'error');
+                return;
+            }
+            
+            try {
+                const accounts = await window.ethereum.request({
+                    method: 'eth_requestAccounts'
+                });
+                
+                log(`✅ 连接成功！`, 'success');
+                log(`账户: ${accounts[0]}`, 'success');
+                
+                showDetails('连接的账户', accounts);
+            } catch (error) {
+                log(`❌ 连接失败: ${error.message}`, 'error');
+                log(`错误代码: ${error.code}`, 'error');
+                showDetails('错误详情', error);
+            }
+        }
+
+        async function getAccounts() {
+            document.getElementById('status').innerHTML = '';
+            
+            if (typeof window.ethereum === 'undefined') {
+                log('❌ MetaMask 未找到', 'error');
+                return;
+            }
+            
+            try {
+                const accounts = await window.ethereum.request({
+                    method: 'eth_accounts'
+                });
+                
+                if (accounts.length > 0) {
+                    log(`✅ 找到 ${accounts.length} 个账户`, 'success');
+                    showDetails('账户列表', accounts);
+                } else {
+                    log('⚠️ 未找到已连接的账户', 'warning');
+                    log('请先点击"连接钱包"按钮', 'warning');
+                }
+            } catch (error) {
+                log(`❌ 获取账户失败: ${error.message}`, 'error');
+                showDetails('错误详情', error);
+            }
+        }
+
+        async function getChainId() {
+            document.getElementById('status').innerHTML = '';
+            
+            if (typeof window.ethereum === 'undefined') {
+                log('❌ MetaMask 未找到', 'error');
+                return;
+            }
+            
+            try {
+                const chainId = await window.ethereum.request({
+                    method: 'eth_chainId'
+                });
+                
+                const chainIdDec = parseInt(chainId, 16);
+                const chainNames = {
+                    1: 'Ethereum Mainnet',
+                    5: 'Goerli Testnet',
+                    137: 'Polygon Mainnet',
+                    80001: 'Polygon Mumbai Testnet',
+                    11155111: 'Sepolia Testnet'
+                };
+                
+                const chainName = chainNames[chainIdDec] || '未知网络';
+                
+                log(`✅ 当前链 ID: ${chainId} (${chainIdDec})`, 'success');
+                log(`网络: ${chainName}`, 'success');
+                
+                showDetails('链信息', {
+                    chainIdHex: chainId,
+                    chainIdDecimal: chainIdDec,
+                    networkName: chainName
+                });
+            } catch (error) {
+                log(`❌ 获取链 ID 失败: ${error.message}`, 'error');
+                showDetails('错误详情', error);
+            }
+        }
+
+        // 页面加载时自动检查
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                log('📄 页面已加载，开始自动检查...', 'info');
+                checkMetaMask();
+            }, 1000);
+        });
+
+        // 监听 MetaMask 事件
+        if (typeof window.ethereum !== 'undefined') {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                log(`🔄 账户已变化: ${accounts[0] || '无'}`, 'warning');
+            });
+
+            window.ethereum.on('chainChanged', (chainId) => {
+                log(`🔄 链已切换: ${chainId}`, 'warning');
+                setTimeout(() => location.reload(), 1000);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+*.egg-info/
+dist/
+build/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+*.tsbuildinfo
+
+# TypeScript
+dist/
+*.js.map
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 日志
+*.log
+logs/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# 操作系统
+Thumbs.db
+.DS_Store
+
+# 备份文件
+*.bak
+*.backup
+*~
+
+# 编译输出
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# 其他
+.env.test
+.env.production
+
+# 文档
+docs/

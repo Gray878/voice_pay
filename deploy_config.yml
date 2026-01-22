@@ -1,0 +1,142 @@
+# Voice-to-Pay 部署配置
+# 用于生产环境部署
+
+version: '1.0'
+
+# 服务配置
+services:
+  ai_service:
+    name: voice-to-pay-ai
+    port: 8000
+    replicas: 2
+    resources:
+      cpu: "1"
+      memory: "2Gi"
+    health_check:
+      path: /health
+      interval: 30s
+      timeout: 5s
+    environment:
+      - LOG_LEVEL=info
+      - ENVIRONMENT=production
+  
+  web3_service:
+    name: voice-to-pay-web3
+    port: 3001
+    replicas: 2
+    resources:
+      cpu: "1"
+      memory: "1Gi"
+    health_check:
+      path: /health
+      interval: 30s
+      timeout: 5s
+    environment:
+      - LOG_LEVEL=info
+      - NODE_ENV=production
+  
+  frontend:
+    name: voice-to-pay-frontend
+    port: 3000
+    replicas: 2
+    resources:
+      cpu: "0.5"
+      memory: "512Mi"
+
+# 数据库配置
+databases:
+  postgresql:
+    version: "15"
+    storage: "20Gi"
+    backup:
+      enabled: true
+      schedule: "0 2 * * *"  # 每天凌晨 2 点
+      retention: 7  # 保留 7 天
+  
+  redis:
+    version: "7"
+    storage: "5Gi"
+    persistence: true
+
+# 网络配置
+networking:
+  ingress:
+    enabled: true
+    domain: voice-to-pay.example.com
+    tls:
+      enabled: true
+      cert_manager: true
+  
+  cors:
+    allowed_origins:
+      - https://voice-to-pay.example.com
+    allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+    allowed_headers:
+      - Content-Type
+      - Authorization
+
+# 监控配置
+monitoring:
+  prometheus:
+    enabled: true
+    scrape_interval: 15s
+  
+  grafana:
+    enabled: true
+    dashboards:
+      - api_metrics
+      - transaction_metrics
+      - error_rates
+  
+  alerts:
+    - name: high_error_rate
+      condition: error_rate > 5%
+      duration: 5m
+    - name: slow_response
+      condition: response_time > 2s
+      duration: 5m
+
+# 日志配置
+logging:
+  level: info
+  format: json
+  retention: 30  # 保留 30 天
+  aggregation:
+    enabled: true
+    service: elasticsearch
+
+# 安全配置
+security:
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  
+  api_keys:
+    required: true
+    rotation_days: 90
+  
+  encryption:
+    at_rest: true
+    in_transit: true
+
+# 备份配置
+backup:
+  enabled: true
+  schedule: "0 3 * * *"  # 每天凌晨 3 点
+  retention: 30  # 保留 30 天
+  destinations:
+    - s3
+    - local
+
+# 扩展配置
+scaling:
+  auto_scaling:
+    enabled: true
+    min_replicas: 2
+    max_replicas: 10
+    target_cpu: 70%
+    target_memory: 80%
