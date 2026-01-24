@@ -1,13 +1,13 @@
 import React, { useState, useRef } from 'react';
 
 interface VoiceButtonProps {
-  isListening: boolean;
   onVoiceInput: (transcript: string) => void;
   disabled?: boolean;
 }
 
-const VoiceButton: React.FC<VoiceButtonProps> = ({ isListening, onVoiceInput, disabled }) => {
+const VoiceButton: React.FC<VoiceButtonProps> = ({ onVoiceInput, disabled }) => {
   const [transcript, setTranscript] = useState('');
+  const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   // 初始化 Web Speech API
@@ -22,17 +22,43 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({ isListening, onVoiceInput, di
 
     recognition.lang = 'zh-CN';
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
 
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setTranscript(transcript);
-      onVoiceInput(transcript);
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+
+      const mergedTranscript = `${finalTranscript}${interimTranscript}`.trim();
+      if (mergedTranscript) {
+        setTranscript(mergedTranscript);
+      }
+      if (finalTranscript.trim()) {
+        onVoiceInput(finalTranscript.trim());
+        setIsListening(false);
+      }
     };
 
     recognition.onerror = (event: any) => {
       console.error('语音识别错误:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        setTranscript('未检测到语音，请再试一次');
+        return;
+      }
       alert(`语音识别失败: ${event.error}`);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
     };
 
     return recognition;
@@ -40,6 +66,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({ isListening, onVoiceInput, di
 
   // 开始录音
   const startListening = () => {
+    if (isListening) return;
     if (!recognitionRef.current) {
       recognitionRef.current = initSpeechRecognition();
     }
@@ -47,6 +74,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({ isListening, onVoiceInput, di
     if (recognitionRef.current) {
       recognitionRef.current.start();
       setTranscript('');
+      setIsListening(true);
     }
   };
 
@@ -55,6 +83,7 @@ const VoiceButton: React.FC<VoiceButtonProps> = ({ isListening, onVoiceInput, di
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
+    setIsListening(false);
   };
 
   return (

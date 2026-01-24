@@ -46,18 +46,21 @@ if not exist "ai_service\.venv" (
         pause
         exit /b 1
     )
-    echo Installing Python dependencies...
-    call .venv\Scripts\activate.bat
-    pip install -r requirements.txt
-    if errorlevel 1 (
-        echo [ERROR] Failed to install Python dependencies
-        cd ..
-        pause
-        exit /b 1
-    )
     cd ..
     echo [OK] Python environment created
 )
+
+echo Installing Python dependencies...
+cd ai_service
+call .venv\Scripts\activate.bat
+pip install -r requirements.txt
+if errorlevel 1 (
+    echo [ERROR] Failed to install Python dependencies
+    cd ..
+    pause
+    exit /b 1
+)
+cd ..
 
 if not exist "web3_service\node_modules" (
     echo [WARNING] Web3 service dependencies not found

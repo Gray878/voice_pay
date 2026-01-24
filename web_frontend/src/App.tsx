@@ -11,12 +11,12 @@ function App() {
   const [walletAddress, setWalletAddress] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [sessionId, setSessionId] = useState<string>('');
+  const [discoveryFilters, setDiscoveryFilters] = useState<string[]>([]);
   const [transactionState, setTransactionState] = useState<TransactionState>({
     status: 'idle',
     message: ''
   });
-  const [isListening] = useState(false);
-
   // 处理钱包连接
   const handleWalletConnect = async (address: string) => {
     setIsConnected(true);
@@ -33,22 +33,85 @@ function App() {
       status: 'processing',
       message: '正在处理您的请求...'
     });
+    console.info('Voice input transcript:', transcript);
 
     try {
       // 调用 AI 服务进行语义解析
       const response = await fetch('/api/ai/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: transcript })
+        body: JSON.stringify({ text: transcript, session_id: sessionId || undefined })
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
+      console.info('Parse response:', data);
+      if (!response.ok) {
+        throw new Error(data?.message || '语义解析服务不可用');
+      }
 
-      if (data.success && data.intent === 'search_product') {
-        // 搜索商品
-        await searchProducts(data.entities);
+      // 处理不同意图
+      if (data.success) {
+        if (data.session_id && data.session_id !== sessionId) {
+          setSessionId(data.session_id);
+        }
+        const { intent, entities, missing_info, action, discovery_filters, text_response, default_query } = data;
+
+        if (intent === 'search_product' || intent === 'query' || intent === 'purchase') {
+          if (action === 'show_discovery') {
+            const filters = Array.isArray(discovery_filters) ? discovery_filters : [];
+            setDiscoveryFilters(filters);
+            setTransactionState({
+              status: 'success',
+              message: text_response || '先给你推荐一些热门商品'
+            });
+            const query = default_query || '热门';
+            await searchProducts(query);
+            return;
+          }
+          // 如果有缺失信息，提示用户
+          if (missing_info && missing_info.length > 0) {
+            setDiscoveryFilters([]);
+            setTransactionState({
+              status: 'success',
+              message: `请补充信息: ${missing_info.join(', ')}`
+            });
+            console.info('Missing info:', missing_info);
+            return;
+          }
+          
+          const queryText = buildSearchQuery(entities, transcript);
+          if (!queryText) {
+            setDiscoveryFilters([]);
+            setTransactionState({
+              status: 'success',
+              message: '请告诉我想找的商品或关键词'
+            });
+            console.info('Empty search query, fallback to user prompt');
+            return;
+          }
+
+          // 搜索商品
+          setDiscoveryFilters([]);
+          console.info('Search query:', queryText);
+          await searchProducts(queryText);
+        } else if (intent === 'help') {
+           setDiscoveryFilters([]);
+           setTransactionState({
+              status: 'success',
+              message: '您可以说"我想买个 Azuki"或"查看我的订单"'
+            });
+            console.info('Help intent triggered');
+        } else {
+           setDiscoveryFilters([]);
+           setTransactionState({
+              status: 'success',
+              message: `未识别的指令: ${intent}`
+            });
+            console.info('Unhandled intent:', intent);
+        }
       }
     } catch (error: any) {
+      console.error('Voice input failed:', error);
       setTransactionState({
         status: 'error',
         message: `处理失败: ${error.message}`
@@ -56,8 +119,25 @@ function App() {
     }
   };
 
+  const buildSearchQuery = (entities: any, fallbackText: string) => {
+    if (!entities || typeof entities !== 'object') {
+      return fallbackText;
+    }
+    const parts = [
+      entities.product_name,
+      entities.product_type,
+      entities.category,
+      entities.use_case,
+      entities.collection
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(' ');
+    }
+    return fallbackText;
+  };
+
   // 搜索商品
-  const searchProducts = async (query: any) => {
+  const searchProducts = async (query: string) => {
     try {
       const response = await fetch('/api/ai/search', {
         method: 'POST',
@@ -65,10 +145,15 @@ function App() {
         body: JSON.stringify({ query })
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
+      console.info('Search response:', data);
+      if (!response.ok) {
+        throw new Error(data?.message || '商品搜索服务不可用');
+      }
 
       if (data.success && data.products) {
         setProducts(data.products);
+        setSelectedProduct(null);
         setTransactionState({
           status: 'success',
           message: `找到 ${data.products.length} 个商品`
@@ -79,6 +164,30 @@ function App() {
         status: 'error',
         message: `搜索失败: ${error.message}`
       });
+    }
+  };
+
+  const handleDiscoveryFilter = async (filter: string) => {
+    setTransactionState({
+      status: 'processing',
+      message: `正在加载${filter}推荐...`
+    });
+    await searchProducts(filter);
+  };
+
+  const parseJsonResponse = async (response: Response) => {
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+    if (!text) {
+      return { success: false, message: '服务响应为空' };
+    }
+    if (!contentType.includes('application/json')) {
+      return { success: false, message: text };
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { success: false, message: '服务响应格式异常' };
     }
   };
 
@@ -199,7 +308,6 @@ function App() {
           {/* 语音输入按钮 */}
           <div className="hero-action">
             <VoiceButton
-              isListening={isListening}
               onVoiceInput={handleVoiceInput}
               disabled={!isConnected}
             />
@@ -227,6 +335,22 @@ function App() {
         {/* 商品列表 */}
         {products.length > 0 && (
           <section className="products-section">
+            {discoveryFilters.length > 0 && (
+              <div className="discovery-section">
+                <div className="discovery-header">为你推荐</div>
+                <div className="discovery-filters">
+                  {discoveryFilters.map((filter) => (
+                    <button
+                      key={filter}
+                      className="discovery-chip"
+                      onClick={() => handleDiscoveryFilter(filter)}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <ProductList
               products={products}
               selectedProduct={selectedProduct}

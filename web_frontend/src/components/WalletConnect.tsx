@@ -7,25 +7,73 @@ interface WalletConnectProps {
 }
 
 const WalletConnect: React.FC<WalletConnectProps> = ({ isConnected, address, onConnect }) => {
+  const resolveMetaMaskProvider = async () => {
+    const { ethereum } = window as any;
+    if (ethereum?.isMetaMask) return ethereum;
+    if (Array.isArray(ethereum?.providers) && ethereum.providers.length > 0) {
+      const metaMaskProvider = ethereum.providers.find((provider: any) => provider.isMetaMask);
+      if (metaMaskProvider) return metaMaskProvider;
+    }
+
+    return await new Promise<any>((resolve) => {
+      let resolved = false;
+      const handler = (event: any) => {
+        const provider = event?.detail?.provider;
+        if (provider?.isMetaMask) {
+          resolved = true;
+          window.removeEventListener('eip6963:announceProvider', handler as any);
+          resolve(provider);
+        }
+      };
+
+      window.addEventListener('eip6963:announceProvider', handler as any);
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+      setTimeout(() => {
+        if (!resolved) {
+          window.removeEventListener('eip6963:announceProvider', handler as any);
+          resolve(null);
+        }
+      }, 500);
+    });
+  };
+
   const connectWallet = async () => {
     try {
-      if (typeof (window as any).ethereum === 'undefined') {
+      const provider = await resolveMetaMaskProvider();
+      const requestFn = provider?.request;
+      if (!provider || typeof requestFn !== 'function') {
         alert('请先安装 MetaMask 钱包\n\n下载地址: https://metamask.io/');
         return;
       }
 
-      // 直接使用 request 方法
-      const accounts = await (window as any).ethereum.request({
+      let accounts = await requestFn({
         method: 'eth_requestAccounts',
       });
 
+      if (!accounts || accounts.length === 0) {
+        accounts = await requestFn({ method: 'eth_accounts' });
+      }
+
       if (accounts && accounts.length > 0) {
         onConnect(accounts[0]);
+      } else if (provider?.selectedAddress) {
+        onConnect(provider.selectedAddress);
       }
     } catch (error: any) {
       console.error('连接钱包失败:', error);
       if (error.code === 4001) {
         alert('您拒绝了连接请求');
+      } else if (error.code === -32002) {
+        const provider = await resolveMetaMaskProvider();
+        if (provider?.request) {
+          const accounts = await provider.request({ method: 'eth_accounts' });
+          if (accounts && accounts.length > 0) {
+            onConnect(accounts[0]);
+            return;
+          }
+        }
+        alert('MetaMask 正在等待您的确认，请打开扩展继续');
       } else {
         alert(`连接失败: ${error.message}`);
       }

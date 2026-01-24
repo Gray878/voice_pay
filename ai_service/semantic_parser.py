@@ -4,6 +4,8 @@
 """
 
 import logging
+import time
+import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -72,6 +74,10 @@ class SemanticParser:
     Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
     """
     
+    _llm_lock = threading.Lock()
+    _last_call_ts = 0.0
+    _min_interval_seconds = 1.2
+
     # Few-shot learning 示例
     FEW_SHOT_EXAMPLES = """
 示例 1:
@@ -193,18 +199,50 @@ class SemanticParser:
         logger.info(f"开始解析用户输入: '{text}'")
         
         try:
-            # 如果提供了会话上下文，更新对话记忆
+            # 构造提示
+            conversation_text = ""
             if session_context and 'conversation_history' in session_context:
-                self._update_memory_from_context(session_context['conversation_history'])
-            
-            # 调用 LLM 进行解析
-            response = self.conversation.predict(input=text)
+                # 转换历史格式
+                history = session_context['conversation_history']
+                for msg in history[-self.max_history*2:]:
+                    role = "User" if msg.get('role') == 'user' else "Assistant"
+                    conversation_text += f"{role}: {msg.get('content')}\n"
+
+            # 填充 System Prompt
+            prompt = self.SYSTEM_PROMPT_TEMPLATE.format(
+                few_shot_examples=self.FEW_SHOT_EXAMPLES,
+                history=conversation_text,
+                input=text
+            )
+
+            messages = [{"role": "user", "content": prompt}]
+            response = None
+            last_error = None
+            for attempt in range(3):
+                try:
+                    with self._llm_lock:
+                        now = time.time()
+                        wait_seconds = self._min_interval_seconds - (now - self._last_call_ts)
+                        if wait_seconds > 0:
+                            time.sleep(wait_seconds)
+                        response = self.llm_adapter.chat_completion(
+                            messages=messages,
+                            temperature=self.temperature
+                        )
+                        self._last_call_ts = time.time()
+                    break
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"LLM 调用失败，尝试 {attempt + 1}/3: {e}")
+                    time.sleep(0.8 * (attempt + 1))
+            if response is None:
+                raise RuntimeError(f"LLM 调用失败: {last_error}")
             
             # 解析 LLM 响应
             parsed_result = self._parse_llm_response(response)
             
             # 如果是引用类型（如"第一个"），解析引用
-            if 'reference' in parsed_result['entities']:
+            if 'reference' in parsed_result.get('entities', {}):
                 resolved_entity = self.resolve_reference(
                     text,
                     session_context or {}
@@ -215,7 +253,7 @@ class SemanticParser:
             # 创建 ParsedIntent 对象
             intent = ParsedIntent(
                 intent=IntentType(parsed_result['intent'].lower()),
-                entities=parsed_result['entities'],
+                entities=parsed_result.get('entities', {}),
                 confidence=parsed_result.get('confidence', 0.8),
                 missing_info=parsed_result.get('missing_info', [])
             )
@@ -229,14 +267,76 @@ class SemanticParser:
             return intent
             
         except Exception as e:
-            logger.error(f"解析失败: {e}")
-            # 返回默认的帮助意图
-            return ParsedIntent(
-                intent=IntentType.HELP,
-                entities={},
-                confidence=0.0,
-                missing_info=["无法理解用户输入"]
-            )
+            logger.error(f"解析失败: {e}", exc_info=True)
+            return self._fallback_parse(text)
+
+    def _fallback_parse(self, text: str) -> ParsedIntent:
+        text_lower = text.lower()
+        entities: Dict[str, Any] = {}
+        intent = IntentType.HELP
+        confidence = 0.4
+
+        if any(word in text_lower for word in ['买', '购买', '想要', '下单', '购买nft', '购买 nft']):
+            intent = IntentType.QUERY
+            confidence = 0.6
+        elif any(word in text_lower for word in ['找', '搜索', '看看', '有没有']):
+            intent = IntentType.QUERY
+            confidence = 0.55
+
+        if 'nft' in text_lower:
+            entities['product_type'] = 'NFT'
+        if 'token' in text_lower:
+            entities['product_type'] = 'Token'
+
+        missing_info = []
+        if intent == IntentType.QUERY and not entities:
+            missing_info = ['商品名称或类型']
+
+        return ParsedIntent(
+            intent=intent,
+            entities=entities,
+            confidence=confidence,
+            missing_info=missing_info
+        )
+
+    def is_discovery_request(
+        self,
+        text: str,
+        parsed_intent: Optional[ParsedIntent] = None
+    ) -> bool:
+        text_lower = text.lower()
+        discovery_keywords = [
+            "不知道买什么",
+            "不知道买啥",
+            "随便看看",
+            "随便选",
+            "有什么推荐",
+            "推荐一下",
+            "推荐点",
+            "看下推荐",
+            "看看推荐",
+            "热门有什么",
+            "有什么热门",
+            "不知道选什么",
+            "帮我选",
+        ]
+        if any(keyword in text_lower for keyword in discovery_keywords):
+            return True
+
+        if not parsed_intent:
+            return False
+
+        if parsed_intent.intent not in {IntentType.QUERY, IntentType.PURCHASE}:
+            return False
+
+        if parsed_intent.entities:
+            return False
+
+        missing_text = "".join(parsed_intent.missing_info or [])
+        if any(keyword in missing_text for keyword in ["商品", "名称", "类型", "关键词", "品类"]):
+            return True
+
+        return False
     
     def extract_entities(self, text: str) -> Dict[str, Any]:
         """

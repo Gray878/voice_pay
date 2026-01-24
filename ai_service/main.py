@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
+import os
 import uvicorn
 import uuid
 from config import settings
@@ -23,6 +24,20 @@ setup_logging(
 )
 
 logger = get_logger(__name__)
+
+from semantic_parser import SemanticParser, IntentType
+from knowledge_base import KnowledgeBase
+from session_manager import SessionManager
+
+# 初始化核心服务
+try:
+    semantic_parser = SemanticParser()
+    knowledge_base = KnowledgeBase()
+    session_manager = SessionManager()
+    logger.info("核心服务初始化成功")
+except Exception as e:
+    logger.error(f"核心服务初始化失败: {e}", exc_info=True)
+    # 不中断启动，但服务可能不可用
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -212,28 +227,81 @@ async def parse_text(request: ParseRequest, req: Request):
     try:
         logger.info(f"Parsing text: {request.text[:50]}...")
         
-        # 模拟语义解析（实际应调用 semantic_parser）
-        # TODO: 集成真实的 semantic_parser
-        text_lower = request.text.lower()
+        session_context = {}
+        session_id = request.session_id
+        session = None
+
+        try:
+            if session_id:
+                session = session_manager.get_session(session_id)
+                if session is None:
+                    session = session_manager.create_session(user_id=session_id)
+                    session_id = session.session_id
+            else:
+                session = session_manager.create_session(user_id="anonymous")
+                session_id = session.session_id
+
+            if session:
+                session_context = {
+                    "conversation_history": session.conversation_history,
+                    "selected_products": session.selected_products
+                }
+        except Exception as e:
+            logger.warning(f"获取会话失败: {e}")
+
+        # 调用语义解析
+        parsed_intent = semantic_parser.parse(
+            text=request.text,
+            session_context=session_context
+        )
+
+        logger.info(
+            f"Parse result: intent={parsed_intent.intent.value}, "
+            f"confidence={parsed_intent.confidence:.3f}, "
+            f"entities={parsed_intent.entities}, "
+            f"missing_info={parsed_intent.missing_info}"
+        )
         
-        # 简单的意图识别
-        if any(word in text_lower for word in ['买', '购买', '想要', '搜索', '找']):
-            intent = 'search_product'
-            # 提取商品关键词
-            entities = {
-                'product_name': request.text,
-                'price_range': None
-            }
-        else:
-            intent = 'unknown'
-            entities = {}
-        
-        return {
+        # 记录到会话历史
+        try:
+            session_manager.add_conversation_message(session_id, "user", request.text)
+            session_manager.add_conversation_message(
+                session_id, 
+                "assistant", 
+                f"Parsed intent: {parsed_intent.intent.value}",
+                metadata={
+                    "intent": parsed_intent.intent.value,
+                    "confidence": parsed_intent.confidence
+                }
+            )
+        except Exception as e:
+            logger.warning(f"更新会话历史失败: {e}")
+
+        action = None
+        discovery_filters = None
+        text_response = None
+        default_query = None
+
+        if semantic_parser.is_discovery_request(request.text, parsed_intent):
+            action = "show_discovery"
+            discovery_filters = ["热门", "新上架", "低价", "高成交"]
+            text_response = "先给你热门推荐，想筛选价格或链可以告诉我"
+            default_query = "热门"
+
+        response_payload = {
             "success": True,
-            "intent": intent,
-            "entities": entities,
-            "confidence": 0.8
+            "session_id": session_id,
+            "intent": parsed_intent.intent.value,
+            "entities": parsed_intent.entities,
+            "confidence": parsed_intent.confidence,
+            "missing_info": parsed_intent.missing_info,
+            "action": action,
+            "text_response": text_response,
+            "discovery_filters": discovery_filters,
+            "default_query": default_query
         }
+
+        return response_payload
     except Exception as e:
         logger.error(f"Parse failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -292,5 +360,5 @@ if __name__ == "__main__":
         "main:app",
         host=settings.ai_service_host,
         port=settings.ai_service_port,
-        reload=True
+        reload=settings.debug and os.name != "nt"
     )
