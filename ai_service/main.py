@@ -137,6 +137,7 @@ class SearchRequest(BaseModel):
     query: str
     top_k: Optional[int] = 5
     list_all: Optional[bool] = False
+    session_id: Optional[str] = None
 
 
 @app.get("/")
@@ -324,10 +325,19 @@ async def search_products(request: SearchRequest, req: Request):
         )
         products = [product.to_dict() for product in results]
 
+        session_id = request.session_id
+        if session_id:
+            session = session_manager.get_session(session_id)
+            if session is None:
+                session = session_manager.create_session(user_id=session_id)
+                session_id = session.session_id
+            session_manager.update_context(session_id, "selected_products", products)
+
         return {
             "success": True,
             "products": products,
-            "total": len(products)
+            "total": len(products),
+            "session_id": session_id
         }
     except Exception as e:
         logger.error(f"Search failed: {str(e)}", exc_info=True)

@@ -7,10 +7,11 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import { createClient } from 'redis';
+import { ethers } from 'ethers';
 import { config } from './config';
 import { walletSDK } from './wallet-sdk';
 import { TransactionModule } from './transaction-module';
-import { TransactionMonitor } from './transaction-monitor';
+import { TransactionMonitor, TxStatus as MonitorTxStatus } from './transaction-monitor';
 import { SecurityValidator } from './security-validator';
 import { WalletSelector } from './wallet-selector';
 import { ChainOptimizer } from './chain-optimizer';
@@ -73,6 +74,12 @@ const paymentOrchestrator = new PaymentOrchestrator(
   transactionModule,
   transactionMonitor
 );
+const rpcUrl = config.alchemyPolygonMumbaiRpc || config.polygonMumbaiRpcUrl;
+const rpcProvider = new ethers.JsonRpcProvider(rpcUrl);
+const backendWallet = config.web3ServicePrivateKey
+  ? new ethers.Wallet(config.web3ServicePrivateKey, rpcProvider)
+  : null;
+let lastPaymentTxHash: string | null = null;
 
 // 健康检查
 app.get('/', (req: Request, res: Response) => {
@@ -140,7 +147,23 @@ app.post('/transaction/send', async (req: Request, res: Response, next: NextFunc
 app.get('/transaction/status/:txHash', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { txHash } = req.params;
-    const status = await transactionMonitor.pollStatus(txHash);
+    let status = await transactionMonitor.pollStatus(txHash);
+
+    if (!status) {
+      const receipt = await rpcProvider.getTransactionReceipt(txHash);
+      if (!receipt) {
+        status = { hash: txHash, status: MonitorTxStatus.PENDING };
+      } else {
+        status = {
+          hash: txHash,
+          status: receipt.status === 1 ? MonitorTxStatus.CONFIRMED : MonitorTxStatus.FAILED,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed?.toString(),
+          effectiveGasPrice: receipt.gasPrice?.toString()
+        };
+      }
+    }
+
     res.json({ success: true, data: status });
   } catch (error) {
     next(error);
@@ -226,22 +249,48 @@ app.get('/transaction/stats/:userId', async (req: Request, res: Response, next: 
 // 支付编排 API
 app.post('/payment/start', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { product, userAddress } = req.body;
-    
-    logger.info('Starting payment', { product: product.name, userAddress });
-    
-    // 简化的支付流程（实际应使用 paymentOrchestrator）
-    // TODO: 集成完整的 paymentOrchestrator 流程
-    
-    // 模拟交易哈希
-    const txHash = `0x${Math.random().toString(16).substr(2, 64)}`;
-    
-    logger.info('Payment started', { txHash });
-    
-    res.json({ 
-      success: true, 
+    const { product, userAddress, productId, productName, amount, recipientAddress } = req.body;
+    const resolvedProduct = product || {
+      id: productId,
+      name: productName,
+      price: amount,
+      contract_address: recipientAddress
+    };
+    const resolvedRecipient = resolvedProduct?.contract_address || recipientAddress;
+    const rawAmount = resolvedProduct?.price || amount;
+
+    if (!resolvedProduct?.name || !resolvedRecipient || !rawAmount) {
+      throw ErrorHandler.validationError('支付请求缺少必要字段');
+    }
+
+    if (!backendWallet) {
+      throw ErrorHandler.validationError('未配置服务端私钥');
+    }
+
+    const amountValue = typeof rawAmount === 'number'
+      ? rawAmount.toString()
+      : rawAmount.toString().replace(/,/g, '').match(/[\d.]+/)?.[0];
+
+    if (!amountValue) {
+      throw ErrorHandler.validationError('支付金额格式错误');
+    }
+
+    logger.info('Starting payment', { product: resolvedProduct.name, userAddress });
+
+    const toAddress = ethers.getAddress(resolvedRecipient);
+    const txResponse = await backendWallet.sendTransaction({
+      to: toAddress,
+      value: ethers.parseEther(amountValue)
+    });
+
+    lastPaymentTxHash = txResponse.hash;
+
+    logger.info('Payment started', { txHash: txResponse.hash });
+
+    res.json({
+      success: true,
       message: '支付流程已启动',
-      txHash 
+      txHash: txResponse.hash
     });
   } catch (error: any) {
     logger.error('Payment start failed', error);
@@ -251,8 +300,24 @@ app.post('/payment/start', async (req: Request, res: Response, next: NextFunctio
 
 app.post('/payment/confirm', async (req: Request, res: Response) => {
   try {
-    await paymentOrchestrator.confirmPayment();
-    res.json({ success: true, message: '支付已确认' });
+    if (!lastPaymentTxHash) {
+      throw ErrorHandler.validationError('没有待确认的支付');
+    }
+
+    const receipt = await rpcProvider.waitForTransaction(lastPaymentTxHash, 1, 300000);
+    if (!receipt) {
+      throw new Error('交易确认超时');
+    }
+
+    const status = receipt.status === 1 ? 'CONFIRMED' : 'FAILED';
+    res.json({
+      success: receipt.status === 1,
+      message: receipt.status === 1 ? '支付已确认' : '支付失败',
+      txHash: lastPaymentTxHash,
+      status,
+      blockNumber: receipt.blockNumber,
+      gasUsed: receipt.gasUsed?.toString()
+    });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
   }
@@ -260,7 +325,7 @@ app.post('/payment/confirm', async (req: Request, res: Response) => {
 
 app.post('/payment/cancel', (req: Request, res: Response) => {
   try {
-    paymentOrchestrator.cancelPayment();
+    lastPaymentTxHash = null;
     res.json({ success: true, message: '支付已取消' });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });

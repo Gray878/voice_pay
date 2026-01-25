@@ -880,3 +880,7 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.loading-spinner {
+  animation: spin 1s linear infinite !important;
+}

@@ -24,6 +24,7 @@ export interface AppConfig {
   // 区块链配置
   polygonMumbaiRpcUrl: string;
   polygonMumbaiChainId: number;
+  web3ServicePrivateKey?: string;
   
   // Alchemy 配置
   alchemyApiKey?: string;
@@ -75,6 +76,7 @@ export const config: AppConfig = {
   // 区块链配置
   polygonMumbaiRpcUrl: process.env.POLYGON_MUMBAI_RPC_URL || 'https://rpc-mumbai.maticvigil.com',
   polygonMumbaiChainId: parseInt(process.env.POLYGON_MUMBAI_CHAIN_ID || '80001', 10),
+  web3ServicePrivateKey: process.env.WEB3_SERVICE_PRIVATE_KEY,
   
   // Alchemy 配置
   alchemyApiKey: process.env.ALCHEMY_API_KEY,

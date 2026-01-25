@@ -12,12 +12,7 @@ const TransactionStatus: React.FC<TransactionStatusProps> = ({ state }) => {
     switch (state.status) {
       case 'processing':
       case 'pending':
-        return (
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-        );
+        return <div className="loading-spinner"></div>;
       case 'success':
         return (
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2">
@@ -79,9 +74,6 @@ const TransactionStatus: React.FC<TransactionStatusProps> = ({ state }) => {
           </p>
         )}
       </div>
-      {(state.status === 'processing' || state.status === 'pending') && (
-        <div className="loading-spinner"></div>
-      )}
     </div>
   );
 };

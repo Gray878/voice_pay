@@ -58,7 +58,33 @@ function App() {
         }
         const { intent, entities, missing_info, action, discovery_filters, text_response, default_query } = data;
 
-        if (intent === 'search_product' || intent === 'query' || intent === 'purchase') {
+        if (intent === 'purchase') {
+          const selectionCandidates = filteredProducts.length > 0 ? filteredProducts : products;
+          const resolvedProduct = resolveProductSelection(entities, transcript, selectionCandidates);
+          if (resolvedProduct) {
+            setSelectedProduct(resolvedProduct);
+            setTransactionState({
+              status: 'confirmation',
+              message: `已选择 ${resolvedProduct.name}，价格 ${resolvedProduct.price}`
+            });
+            return;
+          }
+          setDiscoveryFilters([]);
+          if (selectionCandidates.length === 0) {
+            setTransactionState({
+              status: 'success',
+              message: '请先搜索商品'
+            });
+          } else {
+            setTransactionState({
+              status: 'success',
+              message: '没有找到对应序号的商品'
+            });
+          }
+          return;
+        }
+
+        if (intent === 'search_product' || intent === 'query') {
           if (action === 'show_discovery') {
             const filters = Array.isArray(discovery_filters) ? discovery_filters : [];
             setDiscoveryFilters(filters);
@@ -67,7 +93,7 @@ function App() {
               message: text_response || '先给你推荐一些热门商品'
             });
             const query = default_query || '热门';
-            await searchProducts(query);
+            await searchProducts(query, undefined, data.session_id || sessionId);
             return;
           }
           // 如果有缺失信息，提示用户
@@ -99,7 +125,7 @@ function App() {
             Boolean(entities?.list_all_products) ||
             isListAllQuery(transcript) ||
             isListAllQuery(queryText);
-          await searchProducts(queryText, { listAll });
+          await searchProducts(queryText, { listAll }, data.session_id || sessionId);
         } else if (intent === 'help') {
            setDiscoveryFilters([]);
            setTransactionState({
@@ -123,6 +149,41 @@ function App() {
         message: `处理失败: ${error.message}`
       });
     }
+  };
+
+  const resolveProductSelection = (entities: any, text: string, candidates: Product[]) => {
+    if (!candidates || candidates.length === 0) {
+      return null;
+    }
+
+    if (entities?.product_id) {
+      const matched = candidates.find((item) => item.id === entities.product_id);
+      if (matched) {
+        return matched;
+      }
+    }
+
+    const textLower = text.toLowerCase();
+    const ordinalMap: Array<[string, number]> = [
+      ['第一个', 0], ['第1个', 0], ['1', 0], ['first', 0],
+      ['第二个', 1], ['第2个', 1], ['2', 1], ['second', 1],
+      ['第三个', 2], ['第3个', 2], ['3', 2], ['third', 2],
+      ['第四个', 3], ['第4个', 3], ['4', 3], ['fourth', 3],
+      ['第五个', 4], ['第5个', 4], ['5', 4], ['fifth', 4]
+    ];
+
+    for (const [keyword, index] of ordinalMap) {
+      if (textLower.includes(keyword)) {
+        return candidates[index] || null;
+      }
+    }
+
+    const demonstratives = ['这个', '那个', 'this', 'that', '它'];
+    if (demonstratives.some((keyword) => textLower.includes(keyword))) {
+      return candidates[candidates.length - 1] || null;
+    }
+
+    return null;
   };
 
   const buildSearchQuery = (entities: any, fallbackText: string) => {
@@ -173,9 +234,16 @@ function App() {
     return keywords.some((keyword) => lowerText.includes(keyword));
   };
 
-  const searchProducts = async (query: string, options?: { listAll?: boolean }) => {
+  const searchProducts = async (
+    query: string,
+    options?: { listAll?: boolean },
+    sessionOverride?: string
+  ) => {
     try {
-      const payload: Record<string, any> = { query };
+      const payload: Record<string, any> = {
+        query,
+        session_id: sessionOverride || sessionId || undefined
+      };
       if (options?.listAll) {
         payload.list_all = true;
       }
@@ -192,6 +260,10 @@ function App() {
       console.info('Search response:', data);
       if (!response.ok) {
         throw new Error(data?.message || '商品搜索服务不可用');
+      }
+
+      if (data.session_id && data.session_id !== sessionId) {
+        setSessionId(data.session_id);
       }
 
       if (data.success && data.products) {

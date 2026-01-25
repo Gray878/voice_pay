@@ -41,7 +41,7 @@ class ProductEntity:
             "name": self.name,
             "description": self.description,
             "category": self.category,
-            "price": self.price,
+            "price": str(self.price),
             "currency": self.currency,
             "chain": self.chain,
             "contract_address": self.contract_address,
