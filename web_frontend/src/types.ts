@@ -8,6 +8,7 @@ export interface Product {
   chain: string;
   contract_address: string;
   image_url?: string;
+  category?: string;
 }
 
 export interface TransactionState {

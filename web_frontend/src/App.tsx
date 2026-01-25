@@ -13,6 +13,8 @@ function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [sessionId, setSessionId] = useState<string>('');
   const [discoveryFilters, setDiscoveryFilters] = useState<string[]>([]);
+  const [listAllMode, setListAllMode] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('全部');
   const [transactionState, setTransactionState] = useState<TransactionState>({
     status: 'idle',
     message: ''
@@ -93,7 +95,11 @@ function App() {
           // 搜索商品
           setDiscoveryFilters([]);
           console.info('Search query:', queryText);
-          await searchProducts(queryText);
+          const listAll =
+            Boolean(entities?.list_all_products) ||
+            isListAllQuery(transcript) ||
+            isListAllQuery(queryText);
+          await searchProducts(queryText, { listAll });
         } else if (intent === 'help') {
            setDiscoveryFilters([]);
            setTransactionState({
@@ -136,13 +142,50 @@ function App() {
     return fallbackText;
   };
 
-  // 搜索商品
-  const searchProducts = async (query: string) => {
+  const isListAllQuery = (text: string) => {
+    if (!text) {
+      return false;
+    }
+    const lowerText = text.toLowerCase();
+    const keywords = [
+      '列出所有商品',
+      '列出全部商品',
+      '列出所有',
+      '列出全部',
+      '展示全部商品',
+      '展示所有商品',
+      '全部商品',
+      '所有商品',
+      '所有的商品',
+      '把所有商品',
+      '把全部商品',
+      '全部列出',
+      '全部列出来',
+      '列出来所有',
+      '列出来全部',
+      '全都有哪些',
+      '有哪些商品',
+      '所有nft',
+      '全部nft',
+      '全部token',
+      '所有token'
+    ];
+    return keywords.some((keyword) => lowerText.includes(keyword));
+  };
+
+  const searchProducts = async (query: string, options?: { listAll?: boolean }) => {
     try {
+      const payload: Record<string, any> = { query };
+      if (options?.listAll) {
+        payload.list_all = true;
+      }
+      const enableListAll = Boolean(options?.listAll);
+      setListAllMode(enableListAll);
+      setSelectedCategory('全部');
       const response = await fetch('/api/ai/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
+        body: JSON.stringify(payload)
       });
 
       const data = await parseJsonResponse(response);
@@ -174,6 +217,38 @@ function App() {
     });
     await searchProducts(filter);
   };
+
+  const normalizeCategory = (category?: string) => {
+    if (!category) {
+      return '其他';
+    }
+    const trimmed = category.trim();
+    return trimmed ? trimmed : '其他';
+  };
+
+  const orderCategories = (categories: string[]) => {
+    const priority = ['NFT', 'TOKEN', 'Token', '热门'];
+    return categories.sort((a, b) => {
+      const aIndex = priority.indexOf(a);
+      const bIndex = priority.indexOf(b);
+      if (aIndex !== -1 || bIndex !== -1) {
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      }
+      return a.localeCompare(b);
+    });
+  };
+
+  const rawCategories = Array.from(
+    new Set(products.map((product) => normalizeCategory(product.category)))
+  );
+  const categoryOptions = listAllMode ? ['全部', ...orderCategories(rawCategories)] : [];
+
+  const filteredProducts =
+    listAllMode && selectedCategory !== '全部'
+      ? products.filter((product) => normalizeCategory(product.category) === selectedCategory)
+      : products;
 
   const parseJsonResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type') || '';
@@ -351,10 +426,24 @@ function App() {
                 </div>
               </div>
             )}
+            {listAllMode && categoryOptions.length > 1 && (
+              <div className="category-filters">
+                {categoryOptions.map((category) => (
+                  <button
+                    key={category}
+                    className={`category-chip ${selectedCategory === category ? 'active' : ''}`}
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            )}
             <ProductList
-              products={products}
+              products={filteredProducts}
               selectedProduct={selectedProduct}
               onSelect={handleProductSelect}
+              groupByCategory={listAllMode && selectedCategory === '全部'}
             />
           </section>
         )}

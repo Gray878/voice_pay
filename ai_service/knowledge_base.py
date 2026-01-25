@@ -157,7 +157,8 @@ class KnowledgeBase:
         self,
         query_vector: List[float],
         top_k: int = 5,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        allow_all: bool = False
     ) -> List[ProductEntity]:
         """
         向量相似度搜索
@@ -171,8 +172,12 @@ class KnowledgeBase:
             商品实体列表
         """
         try:
-            # 限制返回数量不超过 5
-            top_k = min(top_k, 5)
+            if allow_all:
+                total_count = self._get_total_vector_count()
+                if total_count:
+                    top_k = max(top_k or 0, total_count)
+            else:
+                top_k = min(top_k, 5)
             
             # 执行向量搜索
             results = self.index.query(
@@ -206,6 +211,17 @@ class KnowledgeBase:
         except Exception as e:
             logger.error(f"向量搜索失败: {e}")
             raise
+
+    def _get_total_vector_count(self) -> int:
+        stats = self.index.describe_index_stats()
+        total_count = None
+        if isinstance(stats, dict):
+            total_count = stats.get("total_vector_count")
+        else:
+            total_count = getattr(stats, "total_vector_count", None)
+        if total_count is None:
+            return 0
+        return int(total_count)
     
     def get_by_id(self, product_id: str) -> Optional[ProductEntity]:
         """
@@ -366,7 +382,8 @@ class KnowledgeBase:
         self,
         query_text: str,
         top_k: int = 5,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        allow_all: bool = False
     ) -> List[ProductEntity]:
         """
         文本语义搜索（便捷方法）
@@ -380,4 +397,4 @@ class KnowledgeBase:
             商品实体列表
         """
         query_vector = self.generate_embedding(query_text)
-        return self.search(query_vector, top_k, filters)
+        return self.search(query_vector, top_k, filters, allow_all)

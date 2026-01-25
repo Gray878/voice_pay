@@ -2,7 +2,7 @@
 
 AI 驱动的 Web3 语音支付系统，通过自然语言语音交互完成区块链商品购买。
 
-## 🚀 快速开始
+## 快速开始
 
 ### 前置要求
 - Python 3.10+
@@ -42,7 +42,7 @@ cd web3_service && npm run dev
 cd web_frontend && npm run dev
 ```
 
-## 📱 使用说明
+## 使用说明
 
 1. **连接钱包** - 点击右上角"连接钱包"按钮
 2. **语音输入** - 点击麦克风图标说话，例如："我想买一个 NFT"
@@ -50,7 +50,7 @@ cd web_frontend && npm run dev
 4. **确认支付** - 查看详情并确认支付
 5. **等待确认** - 等待区块链确认交易
 
-## 🏗️ 项目结构
+## 项目结构
 
 ```
 voice_to_pay/
@@ -77,11 +77,12 @@ voice_to_pay/
 └── check_env.bat          # 环境检查脚本
 ```
 
-## 🎨 技术栈
+## 技术栈
 
 ### AI 语义层 (Python)
-- **语音识别**: OpenAI Whisper Large V3
-- **语义解析**: LangChain + GPT-4
+- **语音识别**: Whisper
+- **语义解析**: 自研解析器 + 多模型适配器
+- **模型适配**: OpenAI / 智谱 / 通义千问（自动切换）
 - **知识库**: Pinecone 向量数据库
 - **会话管理**: Redis
 
@@ -96,7 +97,7 @@ voice_to_pay/
 - **字体**: Orbitron (标题) + Exo 2 (正文)
 - **语音**: Web Speech API
 
-## 🔧 配置说明
+## 配置说明
 
 ### 环境变量
 
@@ -104,13 +105,16 @@ voice_to_pay/
 
 ```env
 # AI 服务
+LLM_PROVIDER=openai
 OPENAI_API_KEY=your_openai_api_key
+ZHIPU_API_KEY=your_zhipu_api_key
+QWEN_API_KEY=your_qwen_api_key
 PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_INDEX_NAME=voice-to-pay
+PINECONE_INDEX_NAME=voice-to-pay-products
 
 # Web3 服务
-INFURA_API_KEY=your_infura_api_key
-ETHERSCAN_API_KEY=your_etherscan_api_key
+POSTGRES_PASSWORD=your_postgres_password
+API_SECRET_KEY=your_api_secret_key
 
 # 服务端口
 AI_SERVICE_PORT=8000
@@ -118,14 +122,14 @@ WEB3_SERVICE_PORT=3001
 FRONTEND_PORT=5173
 ```
 
-### API 密钥获取
-
+### 模型与密钥
+- **多模型切换**: LLM_PROVIDER 支持逗号分隔顺序，例如 qwen,zhipu,openai
 - **OpenAI**: https://platform.openai.com/api-keys
+- **智谱**: https://open.bigmodel.cn/
+- **通义千问**: https://dashscope.aliyun.com/
 - **Pinecone**: https://www.pinecone.io/
-- **Infura**: https://infura.io/
-- **Etherscan**: https://etherscan.io/apis
 
-## 🐛 常见问题
+## 常见问题
 
 ### 1. 找不到 Python
 **解决方案**: 安装 Python 3.10+
@@ -160,7 +164,7 @@ FRONTEND_PORT=5173
 - 使用国内镜像源
 - 清除缓存后重试
 
-## 🧪 测试
+## 测试
 
 ### Python 测试
 ```bash
@@ -179,7 +183,7 @@ npm run test:watch        # 监听模式
 npm run test:coverage     # 覆盖率报告
 ```
 
-## 📊 API 文档
+## API 文档
 
 ### AI 服务 API (http://localhost:8000)
 
@@ -187,17 +191,22 @@ npm run test:coverage     # 覆盖率报告
 语义解析
 ```json
 {
-  "text": "我想买一个 NFT"
+  "text": "我想买一个 NFT",
+  "session_id": "optional-session-id"
 }
 ```
 
 #### POST /search
-商品搜索
+商品搜索（当前为 mock 数据，后续接入 Pinecone）
 ```json
 {
-  "query": { "product_type": "NFT" }
+  "query": "元宇宙音乐派对",
+  "top_k": 5
 }
 ```
+
+## 设计文档
+项目设计文档见 DESIGN.md
 
 ### Web3 服务 API (http://localhost:3001)
 

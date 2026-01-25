@@ -136,6 +136,7 @@ class ParseRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     top_k: Optional[int] = 5
+    list_all: Optional[bool] = False
 
 
 @app.get("/")
@@ -313,43 +314,20 @@ async def search_products(request: SearchRequest, req: Request):
     """搜索商品"""
     try:
         logger.info(f"Searching products: {request.query}")
-        
-        # 模拟商品搜索（实际应调用 knowledge_base）
-        # TODO: 集成真实的 knowledge_base
-        mock_products = [
-            {
-                "id": "1",
-                "name": "CryptoPunk #1234",
-                "description": "稀有的 CryptoPunk NFT",
-                "price": "0.5 ETH",
-                "chain": "Polygon Mumbai",
-                "contract_address": "0x1234567890123456789012345678901234567890",
-                "image_url": "https://via.placeholder.com/300"
-            },
-            {
-                "id": "2",
-                "name": "Bored Ape #5678",
-                "description": "无聊猿 NFT",
-                "price": "0.3 ETH",
-                "chain": "Polygon Mumbai",
-                "contract_address": "0x2345678901234567890123456789012345678901",
-                "image_url": "https://via.placeholder.com/300"
-            },
-            {
-                "id": "3",
-                "name": "Azuki #9012",
-                "description": "Azuki NFT 系列",
-                "price": "0.2 ETH",
-                "chain": "Polygon Mumbai",
-                "contract_address": "0x3456789012345678901234567890123456789012",
-                "image_url": "https://via.placeholder.com/300"
-            }
-        ]
-        
+
+        list_all = bool(request.list_all) or semantic_parser.is_list_all_request(request.query)
+        top_k = request.top_k or 5
+        results = knowledge_base.search_by_text(
+            request.query,
+            top_k=top_k,
+            allow_all=list_all
+        )
+        products = [product.to_dict() for product in results]
+
         return {
             "success": True,
-            "products": mock_products[:request.top_k],
-            "total": len(mock_products)
+            "products": products,
+            "total": len(products)
         }
     except Exception as e:
         logger.error(f"Search failed: {str(e)}", exc_info=True)

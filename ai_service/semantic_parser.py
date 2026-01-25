@@ -249,6 +249,14 @@ class SemanticParser:
                 )
                 if resolved_entity:
                     parsed_result['entities'].update(resolved_entity)
+
+            if self.is_list_all_request(text, parsed_result):
+                parsed_result["intent"] = "query"
+                entities = parsed_result.get("entities") or {}
+                entities["list_all_products"] = True
+                parsed_result["entities"] = entities
+                parsed_result["missing_info"] = []
+                parsed_result["confidence"] = max(parsed_result.get("confidence", 0.0), 0.8)
             
             # 创建 ParsedIntent 对象
             intent = ParsedIntent(
@@ -275,6 +283,11 @@ class SemanticParser:
         entities: Dict[str, Any] = {}
         intent = IntentType.HELP
         confidence = 0.4
+
+        if self.is_list_all_request(text):
+            intent = IntentType.QUERY
+            confidence = 0.75
+            entities["list_all_products"] = True
 
         if any(word in text_lower for word in ['买', '购买', '想要', '下单', '购买nft', '购买 nft']):
             intent = IntentType.QUERY
@@ -334,6 +347,47 @@ class SemanticParser:
 
         missing_text = "".join(parsed_intent.missing_info or [])
         if any(keyword in missing_text for keyword in ["商品", "名称", "类型", "关键词", "品类"]):
+            return True
+
+        return False
+
+    def is_list_all_request(
+        self,
+        text: str,
+        parsed_intent: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        text_lower = text.lower()
+        list_all_keywords = [
+            "列出所有商品",
+            "列出全部商品",
+            "列出所有",
+            "列出全部",
+            "展示全部商品",
+            "展示所有商品",
+            "全部商品",
+            "所有商品",
+            "所有的商品",
+            "把所有商品",
+            "把全部商品",
+            "全部列出",
+            "全部列出来",
+            "列出来所有",
+            "列出来全部",
+            "全都有哪些",
+            "有哪些商品",
+            "所有nft",
+            "全部nft",
+            "全部token",
+            "所有token"
+        ]
+        if any(keyword in text_lower for keyword in list_all_keywords):
+            return True
+
+        if not parsed_intent:
+            return False
+
+        entities = parsed_intent.get("entities") if isinstance(parsed_intent, dict) else None
+        if entities and entities.get("list_all_products"):
             return True
 
         return False

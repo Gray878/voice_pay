@@ -72,6 +72,36 @@ def create_response(success: bool, data: Any = None, error: str = None, session_
     return asdict(response)
 
 
+def is_list_all_query(text: str) -> bool:
+    if not text:
+        return False
+    text_lower = text.lower()
+    list_all_keywords = [
+        "列出所有商品",
+        "列出全部商品",
+        "列出所有",
+        "列出全部",
+        "展示全部商品",
+        "展示所有商品",
+        "全部商品",
+        "所有商品",
+        "所有的商品",
+        "把所有商品",
+        "把全部商品",
+        "全部列出",
+        "全部列出来",
+        "列出来所有",
+        "列出来全部",
+        "全都有哪些",
+        "有哪些商品",
+        "所有nft",
+        "全部nft",
+        "全部token",
+        "所有token"
+    ]
+    return any(keyword in text_lower for keyword in list_all_keywords)
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """健康检查"""
@@ -208,12 +238,13 @@ def search_products():
         session_id = data.get('session_id')
         filters = data.get('filters', {})
         top_k = data.get('top_k', 5)
+        list_all = bool(data.get('list_all')) or is_list_all_query(query)
         
         if not query:
             return jsonify(create_response(success=False, error='缺少 query 参数')), 400
         
         # 搜索商品
-        results = knowledge_base.search(query, filters=filters, top_k=top_k)
+        results = knowledge_base.search_by_text(query, filters=filters, top_k=top_k, allow_all=list_all)
         
         # 更新会话
         if session_id:
