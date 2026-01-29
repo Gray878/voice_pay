@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import VoiceButton from './components/VoiceButton';
 import ProductList from './components/ProductList';
 import TransactionStatus from './components/TransactionStatus';
 import WalletConnect from './components/WalletConnect';
+import TransactionHistory from './components/TransactionHistory';
 import { Product, TransactionState } from './types';
+import { useTransactionStore } from './store/useTransactionStore';
+import { ethers } from 'ethers';
 import './App.css';
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string>('');
+  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [sessionId, setSessionId] = useState<string>('');
@@ -19,17 +23,36 @@ function App() {
     status: 'idle',
     message: ''
   });
+  
+  const { initManager } = useTransactionStore();
+  
+  // 初始化交易管理器
+  useEffect(() => {
+    if (provider && isConnected) {
+      const orderbookAddress = import.meta.env.VITE_ORDERBOOK_ADDRESS || '';
+      if (orderbookAddress) {
+        initManager(provider, orderbookAddress);
+      }
+    }
+  }, [provider, isConnected]);
+  
   // 处理钱包连接
   const handleWalletConnect = async (address: string) => {
     setIsConnected(true);
     setWalletAddress(address);
+    
+    // 创建 provider
+    if (window.ethereum) {
+      const ethersProvider = new ethers.BrowserProvider(window.ethereum);
+      setProvider(ethersProvider);
+    }
+    
     setTransactionState({
       status: 'success',
       message: `钱包已连接: ${address.slice(0, 6)}...${address.slice(-4)}`
     });
   };
 
-  // 处理语音输入
   const handleVoiceInput = async (transcript: string) => {
     setTransactionState({
       status: 'processing',
@@ -125,7 +148,12 @@ function App() {
             Boolean(entities?.list_all_products) ||
             isListAllQuery(transcript) ||
             isListAllQuery(queryText);
-          await searchProducts(queryText, { listAll }, data.session_id || sessionId);
+          const useNftMatch = shouldUseNftMatch(entities, transcript, queryText, listAll);
+          if (useNftMatch) {
+            await searchNftOrders(queryText, data.session_id || sessionId);
+          } else {
+            await searchProducts(queryText, { listAll }, data.session_id || sessionId);
+          }
         } else if (intent === 'help') {
            setDiscoveryFilters([]);
            setTransactionState({
@@ -234,6 +262,88 @@ function App() {
     return keywords.some((keyword) => lowerText.includes(keyword));
   };
 
+  const shouldUseNftMatch = (entities: any, text: string, queryText: string, listAll: boolean) => {
+    if (listAll) {
+      return false;
+    }
+    const typeValue = entities?.product_type || entities?.productType;
+    if (typeof typeValue === 'string' && typeValue.toLowerCase() === 'nft') {
+      return true;
+    }
+    const lowerText = `${text || ''} ${queryText || ''}`.toLowerCase();
+    return lowerText.includes('nft') || lowerText.includes('tokenid') || lowerText.includes('whimland');
+  };
+
+  const formatUsdOl = (priceRaw?: string, priceUsd?: number) => {
+    if (typeof priceUsd === 'number' && !Number.isNaN(priceUsd)) {
+      return `${priceUsd.toFixed(2)} USDOL`;
+    }
+    if (priceRaw && /^\d+$/.test(priceRaw)) {
+      const value = BigInt(priceRaw);
+      const scale = 1_000_000n;
+      const whole = value / scale;
+      const frac = (value % scale).toString().padStart(6, '0').replace(/0+$/, '');
+      const fracPart = frac ? `.${frac}` : '';
+      return `${whole}${fracPart} USDOL`;
+    }
+    return priceRaw ? String(priceRaw) : '';
+  };
+
+  const parseTokenUriImage = (tokenURI?: string | null) => {
+    if (!tokenURI) {
+      return undefined;
+    }
+    if (tokenURI.startsWith('data:application/json;base64,')) {
+      try {
+        const b64 = tokenURI.slice('data:application/json;base64,'.length);
+        const json = atob(b64);
+        const data = JSON.parse(json);
+        if (typeof data?.image === 'string') {
+          return data.image;
+        }
+      } catch {
+        return undefined;
+      }
+    }
+    if (tokenURI.startsWith('data:application/json,')) {
+      try {
+        const raw = tokenURI.slice('data:application/json,'.length);
+        const json = decodeURIComponent(raw);
+        const data = JSON.parse(json);
+        if (typeof data?.image === 'string') {
+          return data.image;
+        }
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+
+  const buildProductFromMatch = (match: any): Product => {
+    const priceRaw = match?.price != null ? String(match.price) : undefined;
+    const priceUsd = typeof match?.priceUSD === 'number' ? match.priceUSD : undefined;
+    const name = match?.name || (match?.tokenId ? `Token #${match.tokenId}` : match?.orderKey || 'NFT');
+    const imageUrl = parseTokenUriImage(match?.tokenURI);
+    return {
+      id: match?.orderKey || `${match?.collectionAddr || 'collection'}-${match?.tokenId || 'token'}`,
+      name,
+      description: match?.match_reason,
+      price: formatUsdOl(priceRaw, priceUsd),
+      chain: match?.chain || 'WhimLand',
+      contract_address: match?.collectionAddr || '',
+      image_url: imageUrl,
+      category: 'NFT',
+      orderKey: match?.orderKey,
+      tokenId: match?.tokenId != null ? String(match.tokenId) : undefined,
+      collectionAddr: match?.collectionAddr,
+      priceRaw,
+      priceUSD: priceUsd,
+      seller: match?.seller,
+      tokenURI: match?.tokenURI
+    };
+  };
+
   const searchProducts = async (
     query: string,
     options?: { listAll?: boolean },
@@ -272,6 +382,39 @@ function App() {
         setTransactionState({
           status: 'success',
           message: `找到 ${data.products.length} 个商品`
+        });
+      }
+    } catch (error: any) {
+      setTransactionState({
+        status: 'error',
+        message: `搜索失败: ${error.message}`
+      });
+    }
+  };
+
+  const searchNftOrders = async (query: string, sessionOverride?: string) => {
+    try {
+      setListAllMode(false);
+      setSelectedCategory('全部');
+      const response = await fetch('/api/ai/match-nfts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, top_k: 12, session_id: sessionOverride || sessionId || undefined })
+      });
+
+      const data = await parseJsonResponse(response);
+      console.info('Match response:', data);
+      if (!response.ok) {
+        throw new Error(data?.message || 'NFT 匹配服务不可用');
+      }
+
+      if (data?.matches) {
+        const mapped = data.matches.map(buildProductFromMatch);
+        setProducts(mapped);
+        setSelectedProduct(null);
+        setTransactionState({
+          status: 'success',
+          message: mapped.length > 0 ? `找到 ${mapped.length} 个 NFT` : '没有找到相关 NFT'
         });
       }
     } catch (error: any) {
@@ -357,17 +500,25 @@ function App() {
     });
 
     try {
-      // 调用 Web3 服务发送交易
-      const response = await fetch('/api/web3/payment/start', {
+      const useOrderbookBuy = Boolean(selectedProduct.orderKey);
+      const response = await fetch(useOrderbookBuy ? '/api/ai/buy' : '/api/web3/payment/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: selectedProduct,
-          userAddress: walletAddress
-        })
+        body: JSON.stringify(
+          useOrderbookBuy
+            ? {
+                orderKey: selectedProduct.orderKey,
+                userAddress: walletAddress,
+                maxPrice: selectedProduct.priceRaw || undefined
+              }
+            : {
+                product: selectedProduct,
+                userAddress: walletAddress
+              }
+        )
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
 
       if (data.success) {
         setTransactionState({
@@ -395,14 +546,15 @@ function App() {
         const data = await response.json();
 
         if (data.success) {
-          if (data.data.status === 'confirmed') {
+          const status = String(data.data.status || '').toLowerCase();
+          if (status === 'confirmed') {
             clearInterval(interval);
             setTransactionState({
               status: 'success',
               message: '支付成功！',
               txHash
             });
-          } else if (data.data.status === 'failed') {
+          } else if (status === 'failed') {
             clearInterval(interval);
             setTransactionState({
               status: 'error',
@@ -569,6 +721,12 @@ function App() {
             <p>连接钱包后，点击麦克风说出您想购买的商品</p>
           </section>
         )}
+        
+        {/* 交易历史 */}
+        <TransactionHistory 
+          userAddress={walletAddress}
+          isConnected={isConnected}
+        />
       </main>
 
       {/* 页脚 */}

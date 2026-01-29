@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // 加载环境变量
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 /**
  * 应用配置接口

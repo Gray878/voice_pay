@@ -15,6 +15,7 @@ from config import settings
 from voice_feedback import voice_feedback, FeedbackType
 from error_handler import AppError, ErrorResponse
 from logger import setup_logging, set_session_id, clear_session_id, get_logger
+import httpx
 
 # 配置日志系统
 setup_logging(
@@ -28,6 +29,7 @@ logger = get_logger(__name__)
 from semantic_parser import SemanticParser, IntentType
 from knowledge_base import KnowledgeBase
 from session_manager import SessionManager
+from nft_matcher import NFTMatcher
 
 # 初始化核心服务
 try:
@@ -38,6 +40,14 @@ try:
 except Exception as e:
     logger.error(f"核心服务初始化失败: {e}", exc_info=True)
     # 不中断启动，但服务可能不可用
+
+nft_matcher = None
+if settings.llm_provider.lower() == "openai" and settings.openai_api_key:
+    nft_matcher = NFTMatcher(
+        openai_api_key=settings.openai_api_key,
+        embedding_model=settings.openai_embedding_model,
+        min_score=settings.match_min_score
+    )
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -138,6 +148,17 @@ class SearchRequest(BaseModel):
     top_k: Optional[int] = 5
     list_all: Optional[bool] = False
     session_id: Optional[str] = None
+
+class MatchRequest(BaseModel):
+    query: str
+    top_k: Optional[int] = None
+
+class BuyRequest(BaseModel):
+    orderKey: str
+    userAddress: str
+    maxPrice: Optional[str] = None
+    approveMax: Optional[bool] = False
+    dryRun: Optional[bool] = False
 
 
 @app.get("/")
@@ -342,6 +363,75 @@ async def search_products(request: SearchRequest, req: Request):
     except Exception as e:
         logger.error(f"Search failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ai/match-nfts")
+async def match_nfts(request: MatchRequest, req: Request):
+    if not nft_matcher:
+        raise HTTPException(status_code=400, detail="未配置 OPENAI_API_KEY")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{settings.web3_service_url}/api/orderbook/orders",
+                params={"limit": settings.candidate_limit, "includeMetadata": "true"}
+            )
+            response.raise_for_status()
+            candidates = response.json()
+
+        top_k = request.top_k or settings.match_top_k
+        results = await nft_matcher.match_nfts(
+            query=request.query,
+            candidates=candidates,
+            top_k=top_k
+        )
+        return {
+            "query": request.query,
+            "matches": results,
+            "total_candidates": len(candidates)
+        }
+    except httpx.HTTPError as e:
+        logger.error(f"Match fetch failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=502, detail="候选订单获取失败")
+    except Exception as e:
+        logger.error(f"Match failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/match-nfts")
+async def match_nfts_alias(request: MatchRequest, req: Request):
+    return await match_nfts(request, req)
+
+@app.post("/api/ai/buy")
+async def buy_nft(request: BuyRequest, req: Request):
+    try:
+        async with httpx.AsyncClient() as client:
+            payload: Dict[str, Any] = {
+                "orderKey": request.orderKey,
+                "userAddress": request.userAddress,
+                "approveMax": bool(request.approveMax),
+                "dryRun": bool(request.dryRun),
+            }
+            if request.maxPrice is not None:
+                payload["maxPrice"] = str(request.maxPrice)
+            response = await client.post(
+                f"{settings.web3_service_url}/api/web3/buy",
+                json=payload,
+                timeout=60.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return {
+                "success": True,
+                "txHash": data.get("txHash"),
+            }
+    except httpx.HTTPError as e:
+        logger.error(f"Buy request failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=502, detail="购买接口调用失败")
+    except Exception as e:
+        logger.error(f"Buy failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/buy")
+async def buy_nft_alias(request: BuyRequest, req: Request):
+    return await buy_nft(request, req)
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -9,6 +9,13 @@ export interface Product {
   contract_address: string;
   image_url?: string;
   category?: string;
+  orderKey?: string;
+  tokenId?: string;
+  collectionAddr?: string;
+  priceRaw?: string;
+  priceUSD?: number;
+  seller?: string;
+  tokenURI?: string;
 }
 
 export interface TransactionState {

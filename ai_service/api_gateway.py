@@ -244,13 +244,14 @@ def search_products():
             return jsonify(create_response(success=False, error='缺少 query 参数')), 400
         
         # 搜索商品
-        results = knowledge_base.search_by_text(query, filters=filters, top_k=top_k, allow_all=list_all)
+        products = knowledge_base.search_by_text(query, filters=filters, top_k=top_k, allow_all=list_all)
+        results = [p.to_dict() for p in products]
         
         # 更新会话
         if session_id:
             session_manager.update_context(session_id, {
                 'last_search_query': query,
-                'search_results': [r['id'] for r in results]
+                'search_results': [p.id for p in products]
             })
         
         return jsonify(create_response(

@@ -20,6 +20,11 @@ import { TransactionRecordManager, TxStatus, ExportFormat } from './transaction-
 import { ErrorHandler, errorMiddleware, AppError } from './error-handler';
 import { AssetActivator } from './asset-activator';
 import { createLogger, Logger } from './logger';
+import { OrderbookIndexer } from './indexer/orderbook-indexer';
+import { loadIndexerConfig, validateIndexerConfig } from './config/indexer-config';
+import { createOrderbookRoutes } from './routes/orderbook';
+import { matchOrder, type OrderMatchConfig } from './trading/match-order';
+import { RiskChecker } from './risk/risk-checker';
 
 const app = express();
 const logger = createLogger('Main');
@@ -80,6 +85,9 @@ const backendWallet = config.web3ServicePrivateKey
   ? new ethers.Wallet(config.web3ServicePrivateKey, rpcProvider)
   : null;
 let lastPaymentTxHash: string | null = null;
+let orderbookIndexer: OrderbookIndexer | null = null;
+let orderMatchConfig: OrderMatchConfig | null = null;
+let riskChecker: RiskChecker | null = null;
 
 // 健康检查
 app.get('/', (req: Request, res: Response) => {
@@ -399,13 +407,62 @@ app.get('/asset/activation-history/:userAddress?', async (req: Request, res: Res
   }
 });
 
-// 404 处理
-app.use((req: Request, res: Response) => {
-  throw ErrorHandler.notFoundError('API 端点');
-});
+app.post('/api/web3/buy', async (req: Request, res: Response) => {
+  try {
+    if (!orderbookIndexer) {
+      res.status(500).json({ error: '订单簿索引未初始化' });
+      return;
+    }
+    if (!orderMatchConfig) {
+      res.status(500).json({ error: '交易配置未初始化' });
+      return;
+    }
+    if (!orderMatchConfig.WHIMLAND_PRIVATE_KEY) {
+      res.status(400).json({ error: '未配置 WHIMLAND_PRIVATE_KEY' });
+      return;
+    }
+    if (!riskChecker) {
+      res.status(500).json({ error: '风控模块未初始化' });
+      return;
+    }
 
-// 错误处理中间件（必须放在最后）
-app.use(errorMiddleware);
+    const { orderKey, userAddress, maxPrice, dryRun, approveMax } = req.body || {};
+    if (!orderKey || !userAddress) {
+      res.status(400).json({ error: 'orderKey 和 userAddress 为必填' });
+      return;
+    }
+
+    const entry = await orderbookIndexer.getOrderByKey(orderKey);
+    if (!entry) {
+      res.status(404).json({ error: '订单不存在' });
+      return;
+    }
+
+    let maxUnitPriceRaw: bigint | undefined;
+    if (maxPrice != null) {
+      const raw = String(maxPrice);
+      if (!/^\d+$/.test(raw)) {
+        res.status(400).json({ error: 'maxPrice 必须是数字字符串' });
+        return;
+      }
+      maxUnitPriceRaw = BigInt(raw);
+    }
+
+    await riskChecker.checkRisk(
+      { quantity: 1, maxUnitPriceRaw },
+      [{ order: entry.order }]
+    );
+
+    const txHash = await matchOrder(orderMatchConfig, entry.order, {
+      dryRun: Boolean(dryRun),
+      approveMax: Boolean(approveMax),
+    });
+
+    res.json({ txHash });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // 优雅关闭
 process.on('SIGTERM', async () => {
@@ -417,12 +474,63 @@ process.on('SIGTERM', async () => {
 });
 
 // 启动服务器
-const PORT = config.web3ServicePort;
-app.listen(PORT, () => {
-  logger.info(`✓ Web3 Service 运行在端口 ${PORT}`);
-  logger.info(`✓ 环境: ${config.nodeEnv}`);
-  logger.info(`✓ 数据库: ${config.postgresHost}:${config.postgresPort}`);
-  logger.info(`✓ Redis: ${config.redisHost}:${config.redisPort}`);
+async function setupOrderbook(appInstance: express.Application) {
+  const indexerConfig = loadIndexerConfig();
+  validateIndexerConfig(indexerConfig);
+  const indexer = new OrderbookIndexer(indexerConfig);
+  try {
+    await indexer.sync();
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('订单簿初始化同步失败', err);
+  }
+  const syncInterval = parseInt(process.env.SYNC_INTERVAL || '30000');
+  setInterval(async () => {
+    try {
+      await indexer.sync();
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('订单簿同步失败', err);
+    }
+  }, syncInterval);
+  appInstance.use('/api/orderbook', createOrderbookRoutes(indexer));
+  orderbookIndexer = indexer;
+  orderMatchConfig = {
+    RPC_URL: indexerConfig.RPC_URL,
+    RPC_ENDPOINTS: (indexerConfig as any).RPC_ENDPOINTS,
+    CHAIN_ID: indexerConfig.CHAIN_ID,
+    ORDERBOOK_ADDRESS: indexerConfig.ORDERBOOK_ADDRESS,
+    USDOL_ADDRESS: indexerConfig.USDOL_ADDRESS,
+    WHIMLAND_PRIVATE_KEY: process.env.WHIMLAND_PRIVATE_KEY || '',
+  };
+  riskChecker = new RiskChecker({
+    RPC_URL: indexerConfig.RPC_URL,
+    RPC_ENDPOINTS: (indexerConfig as any).RPC_ENDPOINTS,
+    CHAIN_ID: indexerConfig.CHAIN_ID,
+    USDOL_ADDRESS: indexerConfig.USDOL_ADDRESS,
+    MAX_QTY: parseInt(process.env.MAX_QTY || '5'),
+    COLLECTION_ALLOWLIST: process.env.COLLECTION_ALLOWLIST,
+  });
+}
+
+async function startServer() {
+  await setupOrderbook(app);
+  app.use((req: Request, res: Response) => {
+    throw ErrorHandler.notFoundError('API 端点');
+  });
+  app.use(errorMiddleware);
+  const PORT = config.web3ServicePort;
+  app.listen(PORT, () => {
+    logger.info(`✓ Web3 Service 运行在端口 ${PORT}`);
+    logger.info(`✓ 环境: ${config.nodeEnv}`);
+    logger.info(`✓ 数据库: ${config.postgresHost}:${config.postgresPort}`);
+    logger.info(`✓ Redis: ${config.redisHost}:${config.redisPort}`);
+  });
+}
+
+startServer().catch(error => {
+  logger.error('服务启动失败', error);
+  process.exit(1);
 });
 
 export default app;

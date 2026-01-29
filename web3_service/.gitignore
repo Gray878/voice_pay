@@ -1,0 +1,36 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+
+# Hardhat files
+cache
+artifacts
+
+# Deployment files
+deployments/*.json
+!deployments/.gitkeep
+
+# Build files
+dist
+build
+
+# IDE
+.vscode
+.idea
+*.swp
+*.s
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+
+# Hardhat files
+cache
+artifacts
+
+# Depl

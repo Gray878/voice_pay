@@ -259,3 +259,5 @@ class LogQuery:
                     break
         
         return results
+
+logger = get_logger(__name__)

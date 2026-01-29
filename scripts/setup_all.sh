@@ -19,7 +19,6 @@ if [ ! -f "$SCRIPT_DIR/../.env" ]; then
     echo ""
     echo "⚠️  重要: 请编辑 .env 文件，填入以下必需的配置:"
     echo "  - OPENAI_API_KEY"
-    echo "  - PINECONE_API_KEY"
     echo "  - POSTGRES_PASSWORD"
     echo "  - API_SECRET_KEY"
     echo ""

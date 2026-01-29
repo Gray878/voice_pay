@@ -31,20 +31,14 @@ class Settings(BaseSettings):
     # Whisper 配置
     whisper_model: str = Field(default="whisper-large-v3", env="WHISPER_MODEL")
     whisper_device: str = Field(default="cpu", env="WHISPER_DEVICE")
-    
-    # Pinecone 配置
-    pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
-    pinecone_index_name: str = Field(
-        default="voice-to-pay-products",
-        env="PINECONE_INDEX_NAME"
-    )
+ 
     
     # PostgreSQL 配置
     postgres_host: str = Field(default="localhost", env="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, env="POSTGRES_PORT")
     postgres_db: str = Field(default="voice_to_pay", env="POSTGRES_DB")
     postgres_user: str = Field(default="postgres", env="POSTGRES_USER")
-    postgres_password: str = Field(..., env="POSTGRES_PASSWORD")
+    postgres_password: str = Field(default="", env="POSTGRES_PASSWORD")
     
     # Redis 配置
     redis_host: str = Field(default="localhost", env="REDIS_HOST")
@@ -67,6 +61,11 @@ class Settings(BaseSettings):
     
     # 知识库配置
     search_top_k: int = Field(default=5, env="SEARCH_TOP_K")
+
+    # 匹配配置
+    match_min_score: float = Field(default=0.3, env="MATCH_MIN_SCORE")
+    match_top_k: int = Field(default=5, env="MATCH_TOP_K")
+    candidate_limit: int = Field(default=20, env="CANDIDATE_LIMIT")
     
     # 日志配置
     log_level: str = Field(default="info", env="LOG_LEVEL")
