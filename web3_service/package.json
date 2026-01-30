@@ -12,6 +12,7 @@
     "deploy:localhost": "hardhat run scripts/deploy.js --network localhost",
     "verify": "node scripts/verify-deployment.js",
     "example": "node examples/orderbook-usage.js",
+    "fetch-nft": "ts-node scripts/fetch-nft-products.ts",
     "test": "hardhat test",
     "test:rpc": "node scripts/test-rpc.js",
     "node": "hardhat node"
