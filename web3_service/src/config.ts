@@ -6,8 +6,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// 加载环境变量
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// 加载环境变量（override: true 确保 .env 覆盖 shell 里已存在的同名变量，INDEXER_BATCH_SIZE 等生效）
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 /**
  * 应用配置接口
